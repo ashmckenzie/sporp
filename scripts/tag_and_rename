@@ -1,0 +1,49 @@
+#!/usr/bin/env ruby
+
+Dir[File.join('config', 'initialisers', '*.rb')].sort.each { |f| require "./#{f}" }
+
+opts = Trollop::options do
+  opt :verbose, "Verbose mode"
+  opt :debug, "Verbose mode"
+end
+
+$VERBOSE_ON = opts[:verbose] ? true : false
+$DEBUG_ON = opts[:debug] ? true : false
+
+$logger = Logging.logger(STDOUT)
+$logger.level = :off
+$logger.level = :info if $VERBOSE_ON
+$logger.level = :debug if $DEBUG_ON
+
+ARGV.each do |file|
+  begin
+
+    if File.directory?(file)
+      files = Dir[File.join(file, '**/*')]
+    else
+      files = [ file ]
+    end
+
+    files.each do |file|
+
+      next unless File.file?(file)
+
+      unless Sporp::is_audio_file?(file)
+        $logger.error "File '#{file}' is not an audio type"
+        next
+      end
+
+      if Sporp::already_processed?(file)
+        $logger.info "Song '#{file}' is already tagged and renamed!"
+        next
+      end
+
+      $logger.info "Processing '#{file}'"
+      song = Sporp::Song.lookup(file)
+      $logger.info "Found match - #{song.inspect}"
+      song.tag_and_rename!
+    end
+  rescue => e
+    $logger.error e.message
+  end
+end
